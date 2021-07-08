@@ -105,6 +105,28 @@ function sendTransaction(isAdding) {
     transaction.value *= -1;
   }
 
+  showTransaction(transaction);
+
+  postTransaction(
+    transaction,
+    (data) => {
+      if (data.errors) {
+        errorEl.textContent = "Missing Information";
+      } else {
+        // clear form
+        nameEl.value = "";
+        amountEl.value = "";
+      }
+    },
+    (err) => {
+      // clear form
+      nameEl.value = "";
+      amountEl.value = "";
+    }
+  );
+}
+
+function showTransaction(transaction) {
   // add to beginning of current array of data
   transactions.unshift(transaction);
 
@@ -112,7 +134,14 @@ function sendTransaction(isAdding) {
   populateChart();
   populateTable();
   populateTotal();
+}
 
+function postTransaction(
+  transaction,
+  callback = () => {},
+  errorCallback = () => {}
+) {
+  console.log({ errorCallback });
   // also send to server
   fetch("/api/transaction", {
     method: "POST",
@@ -122,25 +151,15 @@ function sendTransaction(isAdding) {
       "Content-Type": "application/json",
     },
   })
-    .then((response) => {
-      return response.json();
-    })
+    .then((response) => response.json())
     .then((data) => {
-      if (data.errors) {
-        errorEl.textContent = "Missing Information";
-      } else {
-        // clear form
-        nameEl.value = "";
-        amountEl.value = "";
-      }
+      callback(data);
+      clearTransactions();
     })
     .catch((err) => {
       // fetch failed, so save in indexed db
       saveTransaction(transaction);
-
-      // clear form
-      nameEl.value = "";
-      amountEl.value = "";
+      errorCallback(err);
     });
 }
 
@@ -159,3 +178,32 @@ if ("serviceWorker" in navigator) {
     });
   });
 }
+
+window.addEventListener("online", (event) => {
+  console.log("Connection just came back!");
+  uploadPendingTransactions();
+});
+
+function getTransactions() {
+  return JSON.parse(localStorage.getItem("transactions")) || [];
+}
+
+function clearTransactions() {
+  return localStorage.removeItem("transactions");
+}
+
+function saveTransaction(transaction) {
+  // Gets existing transactions
+  const transactions = getTransactions();
+
+  transactions.push(transaction);
+  localStorage.setItem("transactions", JSON.stringify(transactions));
+}
+
+function uploadPendingTransactions() {
+  getTransactions().forEach((transaction) =>
+    postTransaction(transaction, () => showTransaction(transaction))
+  );
+}
+
+uploadPendingTransactions();
